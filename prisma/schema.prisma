@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// Sessions are stateless (JWT), so no Account/Session tables are required.
+model User {
+  id           String   @id @default(cuid())
+  name         String?
+  email        String   @unique
+  passwordHash String
+  currency     String   @default("INR")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  categories            Category[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
+}
+
+model Category {
+  id        String           @id @default(cuid())
+  userId    String
+  name      String
+  // null = usable for both income and expense
+  type      TransactionType?
+  icon      String           @default("tag")
+  color     String?
+  isDefault Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+  recurring    RecurringTransaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  categoryId  String
+  type        TransactionType
+  amount      Decimal         @db.Decimal(14, 2)
+  description String
+  notes       String?
+  date        DateTime
+  // Set when generated from a recurring rule; (recurringId, date) is unique so
+  // reprocessing the same occurrence can never create a duplicate.
+  recurringId String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  Category              @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  recurring RecurringTransaction? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+
+  @@unique([recurringId, date])
+  @@index([userId, date])
+  @@index([userId, type, date])
+  @@index([userId, categoryId, date])
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  categoryId String
+  // Monthly limit
+  amount     Decimal  @db.Decimal(14, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+}
+
+model RecurringTransaction {
+  id          String          @id @default(cuid())
+  userId      String
+  categoryId  String
+  type        TransactionType
+  amount      Decimal         @db.Decimal(14, 2)
+  description String
+  frequency   Frequency
+  startDate   DateTime
+  endDate     DateTime?
+  // Next occurrence to generate. A scheduler queries isActive + nextRunDate <= now.
+  nextRunDate DateTime
+  lastRunAt   DateTime?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([isActive, nextRunDate])
+}
