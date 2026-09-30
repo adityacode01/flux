@@ -86,3 +86,15 @@ body {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
   .animate-draw { stroke-dashoffset: 0; }
 }
+
+
+/* Statements page: hide the app chrome and controls when printing / saving as PDF. */
+.print-only { display: none; }
+
+@media print {
+  .no-print, aside, header, nav { display: none !important; }
+  body { background: #fff !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  .print-only { display: block; }
+  #statement-print-area { color: #000; }
+}
